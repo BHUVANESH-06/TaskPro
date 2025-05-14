@@ -1,0 +1,121 @@
+scalar DateTime
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+type ProjectMember {
+  id: ID!
+  projectId: ID!
+  userId: ID!
+  user: User!
+  role: String!
+  joinedAt: DateTime!
+}
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  token: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  projectsCreated: [Project!]!
+  projectsCollaborating: [Project!]!
+  tasksAssigned: [Task!]!
+  comments: [Comment!]!
+}
+
+type Project {
+  id: ID!
+  name: String!
+  description: String
+  owner: User!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  collaborators: [ProjectMember!]!
+  tasks: [Task!]!
+  comments: [Comment!]!
+  labels: [Label!]!
+}
+
+type Task {
+  id: ID!
+  title: String!
+  description: String
+  status: TaskStatus!
+  priority: TaskPriority!
+  dueDate: DateTime
+  project: Project!
+  assignedTo: User
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  comments: [Comment!]!
+  labels: [Label!]!
+}
+
+type Comment {
+  id: ID!
+  content: String!
+  author: User!
+  project: Project
+  task: Task
+  createdAt: DateTime!
+}
+
+type Label {
+  id: ID!
+  name: String!
+  color: String!
+  project: Project!
+}
+
+type Query {
+  me: User
+  myProjects: [Project!]!
+  project(id: ID!): Project
+  task(id: ID!): Task
+}
+
+
+type Mutation {
+  register(name: String!, email: String!, password: String!): User!
+  login(email: String!, password: String!): User!
+
+  createProject(name: String!, description: String, ownerId: ID!): Project!
+  updateProject(id: ID!, name: String, description: String): Project!
+  deleteProject(id: ID!): Boolean!
+  addCollaborator(projectId: ID!, userId: ID!): Project!
+
+  createTask(
+    projectId: ID!
+    title: String!
+    description: String
+    status: TaskStatus!
+    priority: TaskPriority!
+    dueDate: String
+    assignedToId: ID
+  ): Task!
+  updateTask(
+    id: ID!
+    title: String
+    description: String
+    status: TaskStatus
+    priority: TaskPriority
+    dueDate: String
+    assignedToId: ID
+  ): Task!
+  deleteTask(id: ID!): Boolean!
+
+  addCommentToProject(projectId: ID!, content: String!): Comment!
+  addCommentToTask(taskId: ID!, content: String!): Comment!
+
+  createLabel(projectId: ID!, name: String!, color: String!): Label!
+  assignLabelToTask(taskId: ID!, labelId: ID!): Task!
+}

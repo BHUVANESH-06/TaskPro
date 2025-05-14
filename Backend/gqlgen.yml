@@ -1,0 +1,17 @@
+schema:
+  - graph/schema.graphqls
+
+exec:
+  package: generated
+  layout: single-file
+  filename: graph/generated/generated.go
+
+model:
+  filename: graph/model/models_gen.go
+  package: model
+
+resolver:
+  layout: single-file
+  filename: graph/resolver/resolver.go
+  package: graph
+
