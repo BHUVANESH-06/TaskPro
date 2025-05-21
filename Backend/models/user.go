@@ -7,7 +7,7 @@ type User struct {
 	Name      string
 	Email     string    `gorm:"uniqueIndex"`
 	Password  string
-	Token     *string   `gorm:"-"` 
+	Token     *string   `json:"token"` 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

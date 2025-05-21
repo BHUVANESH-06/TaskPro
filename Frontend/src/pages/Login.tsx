@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLogin } from '../hooks/useLogin';
 
 const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const {login, error, loading} = useLogin();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate('/dashboard');
+    const user = await login(email,password);
+    if(user){
+      alert("Login Successful")
+      navigate('/dashboard');
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -50,6 +56,7 @@ const Login = () => {
             >
               Login
             </button>
+            {error && <p>{error}</p>}
             <button
               type="button"
               onClick={handleGoogleLogin}

@@ -11,6 +11,8 @@ enum TaskPriority {
   MEDIUM
   HIGH
 }
+
+
 type ProjectMember {
   id: ID!
   projectId: ID!
@@ -43,6 +45,7 @@ type Project {
   tasks: [Task!]!
   comments: [Comment!]!
   labels: [Label!]!
+  progress: Int!
 }
 
 type Task {
@@ -78,9 +81,12 @@ type Label {
 
 type Query {
   me: User
-  myProjects: [Project!]!
+  myProjects(ownerId: String!): [Project!]!
   project(id: ID!): Project
   task(id: ID!): Task
+  users: [User!]!
+  collaborators(projectID: String!): [User!]! 
+  getProjectMembers(projectID: String!) : [User!]!
 }
 
 
@@ -90,8 +96,9 @@ type Mutation {
 
   createProject(name: String!, description: String, ownerId: ID!): Project!
   updateProject(id: ID!, name: String, description: String): Project!
-  deleteProject(id: ID!): Boolean!
-  addCollaborator(projectId: ID!, userId: ID!): Project!
+  deleteProject(id: String!): Boolean!
+  addCollaborator(projectID: String!, userID: String!): Project!
+  
 
   createTask(
     projectId: ID!

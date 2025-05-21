@@ -8,6 +8,7 @@ import (
 	"log"
 	"fmt"
 	"gorm.io/gorm"
+	"encoding/json"
 )
 
 type ProjectService struct {
@@ -15,6 +16,7 @@ type ProjectService struct {
 }
 
 func (s *ProjectService) CreateProject(name string, description string, ownerID uint) (*models.Project, error) {
+	fmt.Println("HELLO")
 	project := &models.Project{
 		Name:        name,
 		Description: description,
@@ -30,7 +32,80 @@ func (s *ProjectService) CreateProject(name string, description string, ownerID 
 	return project, nil
 }
 
+func (s *ProjectService) GetProjectsByMemberID(userID uint) ([]*models.Project, error) {
+    var projectMembers []models.ProjectMember
+    var memberProjectIDs []uint
+    var projects []*models.Project
+    projectMap := make(map[uint]*models.Project)
+
+    if err := db.DB.Where("user_id = ?", userID).Find(&projectMembers).Error; err != nil {
+        return nil, err
+    }
+
+    for _, pm := range projectMembers {
+        memberProjectIDs = append(memberProjectIDs, pm.ProjectID)
+    }
+
+    if len(memberProjectIDs) > 0 {
+        var memberProjects []*models.Project
+        if err := db.DB.Where("id IN ?", memberProjectIDs).Find(&memberProjects).Error; err != nil {
+            return nil, err
+        }
+        for _, p := range memberProjects {
+            projectMap[p.ID] = p
+        }
+    }
+
+    var ownedProjects []*models.Project
+    if err := db.DB.Where("owner_id = ?", userID).Find(&ownedProjects).Error; err != nil {
+        return nil, err
+    }
+    for _, p := range ownedProjects {
+        projectMap[p.ID] = p 
+    }
+
+    for _, project := range projectMap {
+        projects = append(projects, project)
+    }
+
+    // Optional debug
+    if data, err := json.MarshalIndent(projects, "", "  "); err == nil {
+        fmt.Println("Combined Projects (JSON):")
+        fmt.Println(string(data))
+    }
+
+    return projects, nil
+}
+
+func (s *ProjectService) GetMembersByProjectID(projectID uint) ([]*models.User, error) {
+    var projectMembers []models.ProjectMember
+    var userIDs []uint
+    var users []*models.User
+
+    if err := db.DB.Where("project_id = ?", projectID).Find(&projectMembers).Error; err != nil {
+        return nil, err
+    }
+
+    for _, pm := range projectMembers {
+        userIDs = append(userIDs, pm.UserID)
+    }
+
+    if len(userIDs) > 0 {
+        if err := db.DB.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+            return nil, err
+        }
+    }
+
+    if data, err := json.MarshalIndent(users, "", "  "); err == nil {
+        fmt.Println("Project Members:", string(data))
+    }
+
+    return users, nil
+}
+
+
 func (s *ProjectService) UpdateProject(id uint, name string, description string) (*models.Project, error) {
+	
 	project := &models.Project{}
 	if err := db.DB.First(project, id).Error; err != nil {
 		return nil, errors.New("project not found")
@@ -111,8 +186,9 @@ func (s *ProjectService) GetAllProjects(ownerID uint) ([]models.Project, error) 
 	}
 	return projects, nil
 }
-func (s *ProjectService) AddCollaborator(projectID uint, userID uint, role string) (*models.Project, error) {
 
+func (s *ProjectService) AddCollaborator(projectID uint, userID uint, role string) (*models.Project, error) {
+	fmt.Println("HITTING")
 	var proj models.Project
 	if err := db.DB.First(&proj, projectID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -132,4 +208,26 @@ func (s *ProjectService) AddCollaborator(projectID uint, userID uint, role strin
 		return nil, fmt.Errorf("failed to add collaborator: %w", err)
 	}
 	return &proj, nil
+}
+
+func (s *ProjectService) GetCollaboratorsByProjectID(projectID uint) ([]*models.User, error) {
+	var collaborators []models.User
+
+	err := db.DB.
+		Table("project_members").
+		Select("users.id, users.name, users.email").
+		Joins("join users on users.id = project_members.user_id").
+		Where("project_members.project_id = ?", projectID).
+		Find(&collaborators).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*models.User, len(collaborators))
+	for i := range collaborators {
+		result[i] = &collaborators[i]
+	}
+
+	return result, nil
 }

@@ -1,18 +1,23 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useRegister } from "../hooks/useRegister";
 
 const Signup = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [name,setName] = useState("");
+  const {register,loading,error} = useRegister();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === confirmPassword) {
+    if (password !== confirmPassword) return alert("Passwords don't match");
+
+    const user = await register(name, email, password);
+    if (user) {
+      alert("Registration successful!");
       navigate("/login");
-    } else {
-      alert("Passwords don't match");
     }
   };
 
@@ -46,6 +51,17 @@ const Signup = () => {
           </p>
           <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Name</label>
+              <input
+                type="text"
+                className="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#A1B2D4] transition-all duration-300"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your Name"
+                required
+              />
+            </div>
+          <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
               <input
                 type="email"
@@ -72,7 +88,7 @@ const Signup = () => {
               <input
                 type="password"
                 className="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#A1B2D4] transition-all duration-300"
-                value={password}
+                value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
@@ -83,9 +99,9 @@ const Signup = () => {
               type="submit"
               className="w-full bg-[#A1B2D4] text-black py-3 rounded-lg font-semibold hover:bg-[#B7C9E8] transition-transform transform hover:scale-105 duration-300"
             >
-              Sign Up
+              {loading? "Registering...." : "Sign Up"}
             </button>
-
+            {error && <p className="text-red-500">{error}</p>}
             <button
               type="button"
               className="w-full flex items-center justify-center gap-2 border border-gray-300 py-3 rounded-lg bg-white hover:bg-gray-100 transition-transform transform hover:scale-105 duration-300"

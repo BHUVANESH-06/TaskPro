@@ -39,6 +39,7 @@ type Project struct {
 	Tasks         []*Task          `json:"tasks"`
 	Comments      []*Comment       `json:"comments"`
 	Labels        []*Label         `json:"labels"`
+	Progress      int              `json:"progress"`
 }
 
 type ProjectMember struct {

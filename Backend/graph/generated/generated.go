@@ -87,6 +87,7 @@ type ComplexityRoot struct {
 		Labels        func(childComplexity int) int
 		Name          func(childComplexity int) int
 		Owner         func(childComplexity int) int
+		Progress      func(childComplexity int) int
 		Tasks         func(childComplexity int) int
 		UpdatedAt     func(childComplexity int) int
 	}
@@ -101,10 +102,13 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Me         func(childComplexity int) int
-		MyProjects func(childComplexity int) int
-		Project    func(childComplexity int, id string) int
-		Task       func(childComplexity int, id string) int
+		Collaborators     func(childComplexity int, projectID string) int
+		GetProjectMembers func(childComplexity int, projectID string) int
+		Me                func(childComplexity int) int
+		MyProjects        func(childComplexity int, ownerID string) int
+		Project           func(childComplexity int, id string) int
+		Task              func(childComplexity int, id string) int
+		Users             func(childComplexity int) int
 	}
 
 	Task struct {
@@ -153,9 +157,12 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	Me(ctx context.Context) (*model.User, error)
-	MyProjects(ctx context.Context) ([]*model.Project, error)
+	MyProjects(ctx context.Context, ownerID string) ([]*model.Project, error)
 	Project(ctx context.Context, id string) (*model.Project, error)
 	Task(ctx context.Context, id string) (*model.Task, error)
+	Users(ctx context.Context) ([]*model.User, error)
+	Collaborators(ctx context.Context, projectID string) ([]*model.User, error)
+	GetProjectMembers(ctx context.Context, projectID string) ([]*model.User, error)
 }
 
 type executableSchema struct {
@@ -257,7 +264,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.AddCollaborator(childComplexity, args["projectId"].(string), args["userId"].(string)), true
+		return e.complexity.Mutation.AddCollaborator(childComplexity, args["projectID"].(string), args["userID"].(string)), true
 
 	case "Mutation.addCommentToProject":
 		if e.complexity.Mutation.AddCommentToProject == nil {
@@ -459,6 +466,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Project.Owner(childComplexity), true
 
+	case "Project.progress":
+		if e.complexity.Project.Progress == nil {
+			break
+		}
+
+		return e.complexity.Project.Progress(childComplexity), true
+
 	case "Project.tasks":
 		if e.complexity.Project.Tasks == nil {
 			break
@@ -515,6 +529,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.ProjectMember.UserID(childComplexity), true
 
+	case "Query.collaborators":
+		if e.complexity.Query.Collaborators == nil {
+			break
+		}
+
+		args, err := ec.field_Query_collaborators_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Collaborators(childComplexity, args["projectID"].(string)), true
+
+	case "Query.getProjectMembers":
+		if e.complexity.Query.GetProjectMembers == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getProjectMembers_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetProjectMembers(childComplexity, args["projectID"].(string)), true
+
 	case "Query.me":
 		if e.complexity.Query.Me == nil {
 			break
@@ -527,7 +565,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.complexity.Query.MyProjects(childComplexity), true
+		args, err := ec.field_Query_myProjects_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.MyProjects(childComplexity, args["ownerId"].(string)), true
 
 	case "Query.project":
 		if e.complexity.Query.Project == nil {
@@ -552,6 +595,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Task(childComplexity, args["id"].(string)), true
+
+	case "Query.users":
+		if e.complexity.Query.Users == nil {
+			break
+		}
+
+		return e.complexity.Query.Users(childComplexity), true
 
 	case "Task.assignedTo":
 		if e.complexity.Task.AssignedTo == nil {
@@ -824,6 +874,8 @@ enum TaskPriority {
   MEDIUM
   HIGH
 }
+
+
 type ProjectMember {
   id: ID!
   projectId: ID!
@@ -856,6 +908,7 @@ type Project {
   tasks: [Task!]!
   comments: [Comment!]!
   labels: [Label!]!
+  progress: Int!
 }
 
 type Task {
@@ -891,9 +944,12 @@ type Label {
 
 type Query {
   me: User
-  myProjects: [Project!]!
+  myProjects(ownerId: String!): [Project!]!
   project(id: ID!): Project
   task(id: ID!): Task
+  users: [User!]!
+  collaborators(projectID: String!): [User!]! 
+  getProjectMembers(projectID: String!) : [User!]!
 }
 
 
@@ -903,8 +959,9 @@ type Mutation {
 
   createProject(name: String!, description: String, ownerId: ID!): Project!
   updateProject(id: ID!, name: String, description: String): Project!
-  deleteProject(id: ID!): Boolean!
-  addCollaborator(projectId: ID!, userId: ID!): Project!
+  deleteProject(id: String!): Boolean!
+  addCollaborator(projectID: String!, userID: String!): Project!
+  
 
   createTask(
     projectId: ID!
@@ -947,26 +1004,26 @@ func (ec *executionContext) field_Mutation_addCollaborator_args(ctx context.Cont
 	if err != nil {
 		return nil, err
 	}
-	args["projectId"] = arg0
+	args["projectID"] = arg0
 	arg1, err := ec.field_Mutation_addCollaborator_argsUserID(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["userId"] = arg1
+	args["userID"] = arg1
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_addCollaborator_argsProjectID(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (string, error) {
-	if _, ok := rawArgs["projectId"]; !ok {
+	if _, ok := rawArgs["projectID"]; !ok {
 		var zeroVal string
 		return zeroVal, nil
 	}
 
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
-	if tmp, ok := rawArgs["projectId"]; ok {
-		return ec.unmarshalNID2string(ctx, tmp)
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+	if tmp, ok := rawArgs["projectID"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
 	var zeroVal string
@@ -977,14 +1034,14 @@ func (ec *executionContext) field_Mutation_addCollaborator_argsUserID(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (string, error) {
-	if _, ok := rawArgs["userId"]; !ok {
+	if _, ok := rawArgs["userID"]; !ok {
 		var zeroVal string
 		return zeroVal, nil
 	}
 
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("userId"))
-	if tmp, ok := rawArgs["userId"]; ok {
-		return ec.unmarshalNID2string(ctx, tmp)
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
+	if tmp, ok := rawArgs["userID"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
 	var zeroVal string
@@ -1479,7 +1536,7 @@ func (ec *executionContext) field_Mutation_deleteProject_argsID(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 	if tmp, ok := rawArgs["id"]; ok {
-		return ec.unmarshalNID2string(ctx, tmp)
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
 	var zeroVal string
@@ -1907,6 +1964,90 @@ func (ec *executionContext) field_Query___type_argsName(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_collaborators_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_collaborators_argsProjectID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["projectID"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_collaborators_argsProjectID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["projectID"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+	if tmp, ok := rawArgs["projectID"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_getProjectMembers_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_getProjectMembers_argsProjectID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["projectID"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_getProjectMembers_argsProjectID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["projectID"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+	if tmp, ok := rawArgs["projectID"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_myProjects_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_myProjects_argsOwnerID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["ownerId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_myProjects_argsOwnerID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["ownerId"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("ownerId"))
+	if tmp, ok := rawArgs["ownerId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_project_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2293,6 +2434,8 @@ func (ec *executionContext) fieldContext_Comment_project(_ context.Context, fiel
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -2602,6 +2745,8 @@ func (ec *executionContext) fieldContext_Label_project(_ context.Context, field 
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -2822,6 +2967,8 @@ func (ec *executionContext) fieldContext_Mutation_createProject(ctx context.Cont
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -2899,6 +3046,8 @@ func (ec *executionContext) fieldContext_Mutation_updateProject(ctx context.Cont
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -2986,7 +3135,7 @@ func (ec *executionContext) _Mutation_addCollaborator(ctx context.Context, field
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().AddCollaborator(rctx, fc.Args["projectId"].(string), fc.Args["userId"].(string))
+		return ec.resolvers.Mutation().AddCollaborator(rctx, fc.Args["projectID"].(string), fc.Args["userID"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3031,6 +3180,8 @@ func (ec *executionContext) fieldContext_Mutation_addCollaborator(ctx context.Co
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -4073,6 +4224,50 @@ func (ec *executionContext) fieldContext_Project_labels(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Project_progress(ctx context.Context, field graphql.CollectedField, obj *model.Project) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Project_progress(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Progress, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Project_progress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Project",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ProjectMember_id(ctx context.Context, field graphql.CollectedField, obj *model.ProjectMember) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ProjectMember_id(ctx, field)
 	if err != nil {
@@ -4436,7 +4631,7 @@ func (ec *executionContext) _Query_myProjects(ctx context.Context, field graphql
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().MyProjects(rctx)
+		return ec.resolvers.Query().MyProjects(rctx, fc.Args["ownerId"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4453,7 +4648,7 @@ func (ec *executionContext) _Query_myProjects(ctx context.Context, field graphql
 	return ec.marshalNProject2ᚕᚖtaskproᚋgraphᚋmodelᚐProjectᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_myProjects(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_myProjects(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -4481,9 +4676,22 @@ func (ec *executionContext) fieldContext_Query_myProjects(_ context.Context, fie
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myProjects_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -4544,6 +4752,8 @@ func (ec *executionContext) fieldContext_Query_project(ctx context.Context, fiel
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -4634,6 +4844,226 @@ func (ec *executionContext) fieldContext_Query_task(ctx context.Context, field g
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_task_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_users(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_users(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Users(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚕᚖtaskproᚋgraphᚋmodelᚐUserᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_users(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "token":
+				return ec.fieldContext_User_token(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "projectsCreated":
+				return ec.fieldContext_User_projectsCreated(ctx, field)
+			case "projectsCollaborating":
+				return ec.fieldContext_User_projectsCollaborating(ctx, field)
+			case "tasksAssigned":
+				return ec.fieldContext_User_tasksAssigned(ctx, field)
+			case "comments":
+				return ec.fieldContext_User_comments(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_collaborators(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_collaborators(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Collaborators(rctx, fc.Args["projectID"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚕᚖtaskproᚋgraphᚋmodelᚐUserᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_collaborators(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "token":
+				return ec.fieldContext_User_token(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "projectsCreated":
+				return ec.fieldContext_User_projectsCreated(ctx, field)
+			case "projectsCollaborating":
+				return ec.fieldContext_User_projectsCollaborating(ctx, field)
+			case "tasksAssigned":
+				return ec.fieldContext_User_tasksAssigned(ctx, field)
+			case "comments":
+				return ec.fieldContext_User_comments(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_collaborators_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getProjectMembers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getProjectMembers(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetProjectMembers(rctx, fc.Args["projectID"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚕᚖtaskproᚋgraphᚋmodelᚐUserᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getProjectMembers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "token":
+				return ec.fieldContext_User_token(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "projectsCreated":
+				return ec.fieldContext_User_projectsCreated(ctx, field)
+			case "projectsCollaborating":
+				return ec.fieldContext_User_projectsCollaborating(ctx, field)
+			case "tasksAssigned":
+				return ec.fieldContext_User_tasksAssigned(ctx, field)
+			case "comments":
+				return ec.fieldContext_User_comments(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getProjectMembers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5088,6 +5518,8 @@ func (ec *executionContext) fieldContext_Task_project(_ context.Context, field g
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -5678,6 +6110,8 @@ func (ec *executionContext) fieldContext_User_projectsCreated(_ context.Context,
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -5744,6 +6178,8 @@ func (ec *executionContext) fieldContext_User_projectsCollaborating(_ context.Co
 				return ec.fieldContext_Project_comments(ctx, field)
 			case "labels":
 				return ec.fieldContext_Project_labels(ctx, field)
+			case "progress":
+				return ec.fieldContext_Project_progress(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Project", field.Name)
 		},
@@ -8141,6 +8577,11 @@ func (ec *executionContext) _Project(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "progress":
+			out.Values[i] = ec._Project_progress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -8317,6 +8758,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_task(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "users":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_users(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "collaborators":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_collaborators(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getProjectMembers":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getProjectMembers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
@@ -8964,6 +9471,22 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 	return res
 }
 
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
+	res, err := graphql.UnmarshalInt(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) marshalNLabel2taskproᚋgraphᚋmodelᚐLabel(ctx context.Context, sel ast.SelectionSet, v model.Label) graphql.Marshaler {
 	return ec._Label(ctx, sel, &v)
 }
@@ -9230,6 +9753,50 @@ func (ec *executionContext) marshalNTaskStatus2taskproᚋgraphᚋmodelᚐTaskSta
 
 func (ec *executionContext) marshalNUser2taskproᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v model.User) graphql.Marshaler {
 	return ec._User(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUser2ᚕᚖtaskproᚋgraphᚋmodelᚐUserᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.User) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNUser2ᚖtaskproᚋgraphᚋmodelᚐUser(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNUser2ᚖtaskproᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {

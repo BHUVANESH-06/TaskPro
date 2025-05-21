@@ -140,7 +140,9 @@ mutation {
 	var loginResp GraphQLResponse
 	json.Unmarshal(resp, &loginResp)
 	if raw, ok := loginResp.Data["login"]; ok {
-		var tmp struct{ Token string `json:"token"` }
+		var tmp struct {
+			Token string `json:"token"`
+		}
 		json.Unmarshal(raw, &tmp)
 		token = tmp.Token
 	}
@@ -247,16 +249,15 @@ mutation {
 		}
 	  }
 	}`, projectID, userID)
-	
-		resp, err = sendRequest(addCollabQ, token)
-		if err != nil {
-			log.Fatalf("AddCollaborator request failed: %v", err)
-		}
-		printResponse("ADD_COLLABORATOR", resp)
-	
-		var acResp GraphQLResponse
-		json.Unmarshal(resp, &acResp)
-	
+
+	resp, err = sendRequest(addCollabQ, token)
+	if err != nil {
+		log.Fatalf("AddCollaborator request failed: %v", err)
+	}
+	printResponse("ADD_COLLABORATOR", resp)
+
+	var acResp GraphQLResponse
+	json.Unmarshal(resp, &acResp)
 
 	// 8) ASSIGN LABEL TO TASK
 	assignLabelQ := fmt.Sprintf(`
@@ -287,35 +288,75 @@ mutation {
 		log.Fatalf("MyProjects request failed: %v", err)
 	}
 	printResponse("MY_PROJECTS", resp)
-		// 11) UPDATE PROJECT
-		updateProjQ := `
+	// 11) UPDATE PROJECT
+	updateProjQ := `
 			mutation {
-				updateProject(id:"22", name:"super Project", description:"Updated desc") {
+				updateProject(id:"18", name:"buvi Project", description:"Updated desc") {
 					id
 					name
 					description
 				}
 			}`
 
-		
-			resp, err = sendRequest(updateProjQ, token)
-			if err != nil {
-				log.Fatalf("UpdateProject request failed: %v", err)
-			}
-			printResponse("UPDATE_PROJECT", resp)
-			fmt.Println(string(resp)) // raw response
-		
-			// 12) DELETE PROJECT
-			deleteProjQ :=`
+	resp, err = sendRequest(updateProjQ, token)
+	if err != nil {
+		log.Fatalf("UpdateProject request failed: %v", err)
+	}
+	printResponse("UPDATE_PROJECT", resp)
+	fmt.Println(string(resp)) // raw response
+
+	// 12) DELETE PROJECT
+	deleteProjQ := `
 		mutation {
-		  deleteProject(id:"22")
+		  deleteProject(id:"19")
 		}`
-		
-			resp, err = sendRequest(deleteProjQ, token)
-			if err != nil {
-				log.Fatalf("DeleteProject request failed: %v", err)
-			}
-			printResponse("DELETE_PROJECT", resp)
-			fmt.Println(string(resp)) // raw response
-		
+
+	resp, err = sendRequest(deleteProjQ, token)
+	if err != nil {
+		log.Fatalf("DeleteProject request failed: %v", err)
+	}
+	printResponse("DELETE_PROJECT", resp)
+	fmt.Println(string(resp)) // raw response
+
+	// 13) UPDATE TASK
+	updateTaskQ := fmt.Sprintf(`
+	mutation {
+	  updateTask(
+		id: "%s",
+		title: "Updated Task1",
+		description: "Updated description",
+		status: IN_PROGRESS,
+		priority: MEDIUM,
+		dueDate: "2025-07-01",
+		assignedToId: "%s"
+	  ) {
+		id
+		title
+		status
+		priority
+		description
+		dueDate
+	  }
+	}`, taskID, userID)
+
+	resp, err = sendRequest(updateTaskQ, token)
+	if err != nil {
+		log.Fatalf("UpdateTask request failed: %v", err)
+	}
+	printResponse("UPDATE_TASK", resp)
+	fmt.Println(string(resp)) // Optional: print raw JSON
+
+	// 14) DELETE TASK
+	deleteTaskQ := fmt.Sprintf(`
+	mutation {
+	  deleteTask(id: "%s")
+	}`, taskID)
+
+	resp, err = sendRequest(deleteTaskQ, token)
+	if err != nil {
+		log.Fatalf("DeleteTask request failed: %v", err)
+	}
+	printResponse("DELETE_TASK", resp)
+	fmt.Println(string(resp)) // Optional: print raw JSON
+
 }

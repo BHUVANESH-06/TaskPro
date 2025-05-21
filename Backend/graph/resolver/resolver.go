@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"taskpro/graph/generated"
 	"taskpro/graph/model"
+    "taskpro/models"
 	"time"
     "taskpro/services"
 )
@@ -36,9 +37,10 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 		return nil, err
 	}
 	return &model.User{
-		ID:    fmt.Sprint("%d",user.ID),
+		ID:   strconv.FormatUint(uint64(user.ID), 10),
 		Name:  user.Name,
 		Email: user.Email,
+		Token: user.Token,
 	}, nil
 }
 
@@ -47,7 +49,7 @@ func (r *mutationResolver) CreateProject(ctx context.Context, name string, descr
 		defaultDesc := ""
 		description = &defaultDesc
 	}
-
+    fmt.Println("INSIDE RESOLVE")
 	ownerIDUint, err := strconv.ParseUint(ownerID, 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("invalid owner ID: %v", err)
@@ -96,6 +98,7 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id string, name *s
 
 
 func (r *mutationResolver) DeleteProject(ctx context.Context, id string) (bool, error) {
+    fmt.Println("HITTING DELETE PROJECT",id)
     idUint, err := strconv.ParseUint(id, 10, 32)
     if err != nil {
         return false, fmt.Errorf("invalid project ID: %v", err)
@@ -103,8 +106,10 @@ func (r *mutationResolver) DeleteProject(ctx context.Context, id string) (bool, 
     return r.ProjectService.DeleteProject(uint(idUint))
 }
 
+
 func (r *mutationResolver) AddCollaborator(ctx context.Context, projectID string, userID string) (*model.Project, error) {
     // parse IDs
+    fmt.Println("HITTING")
     pid, err := strconv.ParseUint(projectID, 10, 32)
     if err != nil {
         return nil, fmt.Errorf("invalid project ID: %v", err)
@@ -114,13 +119,11 @@ func (r *mutationResolver) AddCollaborator(ctx context.Context, projectID string
         return nil, fmt.Errorf("invalid user ID: %v", err)
     }
 
-    // call service (use default role, e.g. \"collaborator\")
     proj, err := r.ProjectService.AddCollaborator(uint(pid), uint(uid), "collaborator")
     if err != nil {
         return nil, err
     }
 
-    // map models.Project to *model.Project (GraphQL)
     return &model.Project{
         ID:          fmt.Sprintf("%d", proj.ID),
         Name:        proj.Name,
@@ -141,6 +144,55 @@ func (r *mutationResolver) AddCollaborator(ctx context.Context, projectID string
         }(),
     }, nil
 }
+func (r *queryResolver) Collaborators(ctx context.Context, projectID string) ([]*model.User, error) {
+    fmt.Println("HITTING COLLABORATORS",projectID)
+    pid, err := strconv.ParseUint(projectID, 10, 32)
+    if err != nil {
+        return nil, fmt.Errorf("invalid project ID: %v", err)
+    }
+
+    users, err := r.ProjectService.GetCollaboratorsByProjectID(uint(pid))
+    if err != nil {
+        return nil, err
+    }
+
+    var result []*model.User
+    for _, u := range users {
+        result = append(result, &model.User{
+            ID:    fmt.Sprintf("%d", u.ID),
+            Name:  u.Name,
+            Email: u.Email,
+        })
+    }
+
+    return result, nil
+}
+
+func (r *queryResolver) GetProjectMembers(ctx context.Context, projectID string) ([]*model.User, error) {
+    idUint, err := strconv.ParseUint(projectID, 10, 32)
+    if err != nil {
+        return nil, fmt.Errorf("invalid project ID: %v", err)
+    }
+
+    // Step 1: Fetch from service
+    dbUsers, err := r.ProjectService.GetMembersByProjectID(uint(idUint))
+    if err != nil {
+        return nil, err
+    }
+
+    // Step 2: Convert models.User to model.User
+    var gqlUsers []*model.User
+    for _, u := range dbUsers {
+        gqlUsers = append(gqlUsers, &model.User{
+            ID:    fmt.Sprint(u.ID),
+            Name:  u.Name,
+            Email: u.Email,
+        })
+    }
+
+    return gqlUsers, nil
+}
+
 
 
 func (r *mutationResolver) CreateTask(
@@ -435,9 +487,62 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 }
 
 
-func (r *queryResolver) MyProjects(ctx context.Context) ([]*model.Project, error) {
-	return nil,nil;
+func (r *queryResolver) MyProjects(ctx context.Context, ownerID string) ([]*model.Project, error) {
+    id, err := strconv.ParseUint(ownerID, 10, 64)
+    if err != nil {
+        return nil, err
+    }
+    proList, err := r.ProjectService.GetProjectsByMemberID(uint(id))
+    if err != nil {
+        return nil, err
+    }
+    fmt.Println("RESOLVER HELLO")
+    var gqlProjects []*model.Project
+    for _, pro := range proList {
+        progress := CalculateProgress(pro.Tasks)
+        fmt.Printf("Project %s progress: %d%%\n", pro.Name, progress)
+        gqlProjects = append(gqlProjects, &model.Project{
+            ID:          strconv.FormatUint(uint64(pro.ID), 10),
+            Name:        pro.Name,
+            Description: &pro.Description,
+            Owner: &model.User{
+                ID:    strconv.FormatUint(uint64(pro.Owner.ID), 10),
+                Name:  pro.Owner.Name,
+                Email: pro.Owner.Email,
+            },
+            Progress: progress,
+            CreatedAt: pro.CreatedAt.Format(time.RFC3339),
+            UpdatedAt: pro.UpdatedAt.Format(time.RFC3339),
+            Collaborators: []*model.ProjectMember{},
+            Tasks:         []*model.Task{},
+            Comments:      []*model.Comment{},
+            Labels:        []*model.Label{},
+        })
+        
+    }
+    return gqlProjects, nil
 }
+type UserService struct{}
+
+func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
+
+    users, err := r.UserService.GetAllUsers()
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch users: %w", err)
+    }
+
+    var gqlUsers []*model.User
+    for _, u := range users {
+        gqlUsers = append(gqlUsers, &model.User{
+            ID:    fmt.Sprintf("%d", u.ID),
+            Name:  u.Name,
+            Email: u.Email,
+        })
+    }
+
+    return gqlUsers, nil
+}
+
 
 func (r *queryResolver) Project(ctx context.Context, id string) (*model.Project, error) {
 	return nil,nil;
@@ -456,4 +561,17 @@ type queryResolver struct{ *Resolver }
 func getUserIDFromContext(ctx context.Context) string {
 	// Placeholder: replace with your actual context extraction logic
 	return ctx.Value("userID").(string)
+}
+func CalculateProgress(tasks []models.Task) int {
+    total := len(tasks)
+    if total == 0 {
+        return 0
+    }
+    completed := 0
+    for _, task := range tasks {
+        if task.Status=="DONE" {
+            completed++
+        }
+    }
+    return (completed * 100) / total
 }

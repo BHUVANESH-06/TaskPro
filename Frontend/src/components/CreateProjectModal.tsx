@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { FaTimes } from 'react-icons/fa';
-
+import { useCreateProject } from '../hooks/useCreateProject';
+import { createProject } from '../services/projectService';
+import type { Project } from '../pages/Projects';
 interface Props {
   onClose: () => void;
+  setProject: (projects: Project[])=> void;
+  project: Project[];
 }
 
-const CreateProjectModal: React.FC<Props> = ({ onClose }) => {
+const CreateProjectModal: React.FC<Props> = ({ onClose, setProject,project }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [collaborators, setCollaborators] = useState<string[]>([]);
-
+  const createProject = useCreateProject();
   const allCollaborators = ['Chullu', 'Shanu', 'Kavi', 'Deepa', 'Ravi', 'Meera']; 
 
   const handleCollaboratorChange = (event: React.ChangeEvent<HTMLInputElement>, name: string) => {
@@ -20,10 +24,18 @@ const CreateProjectModal: React.FC<Props> = ({ onClose }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log({ title, description, collaborators });
-    onClose();
+
+    const createdProject = await createProject(title,description);
+    if(createdProject){
+      setProject([...project, createdProject])
+      console.log("Project created,",createdProject);
+      onClose();
+    }else{
+      alert("Failed");
+    }
+    
   };
 
   return (

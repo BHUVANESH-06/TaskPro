@@ -10,7 +10,7 @@ type Project struct {
 	Owner       User      `gorm:"foreignKey:OwnerID"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-
+	Progress     int       `gorm:"default:0"` 
 	Tasks        []Task
 	Comments     []Comment
 	Collaborators []ProjectMember `gorm:"foreignKey:ProjectID"`

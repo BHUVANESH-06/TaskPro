@@ -4,6 +4,8 @@ go 1.24.2
 
 require (
 	github.com/99designs/gqlgen v0.17.73
+	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/joho/godotenv v1.5.1
 	github.com/vektah/gqlparser/v2 v2.5.26

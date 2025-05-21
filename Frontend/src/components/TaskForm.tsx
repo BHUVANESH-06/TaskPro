@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Task } from '../types/task';
-
+import type { Project } from '../pages/Projects';
+import { useProjects } from '../hooks/myProject';
 interface TaskFormProps {
   onSubmit: (task: Task) => void;
   onClose: () => void;
   initialTask?: Task;
+  project: Project[]
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onClose, initialTask }) => {
@@ -17,8 +19,17 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onClose, initialTask }) =
       assignee: '',
       dueDate: '',
       progress: 0,
+      projectId:'',
     }
   );
+  const [project,setProject] = useState<Project[]>([]);
+  const {projects,loading,error} = useProjects();
+  
+  useEffect(()=>{
+    if(projects){
+      setProject(projects);
+    }
+  },[projects])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -72,6 +83,21 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onClose, initialTask }) =
             <option>Medium</option>
             <option>Low</option>
           </select>
+          <select
+              name="projectId"
+              value={form.projectId}
+              onChange={handleChange}
+              className="w-full mb-3 p-2 border rounded"
+              required
+            >
+              <option value="">Select Project</option>
+              {project.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+          </select>
+
         </div>
 
         <input
