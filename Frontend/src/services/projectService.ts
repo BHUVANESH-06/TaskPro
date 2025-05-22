@@ -3,7 +3,7 @@ import MY_PROJECTS_QUERY from "../graphql/query/myProjects";
 import ADD_COLLABORATOR_MUTATION from "../graphql/mutations/addCollaborator";
 import { GET_INITIAL_COLLABORATORS } from "../graphql/query/initialCollaborators";
 import DELETE_PROJECT from "../graphql/mutations/deleteProject";
-
+import GET_PROJECT_MEMBERS from "../graphql/query/getProjectMembers";
 export async function createProject(name: string, description: string, ownerId: string) {
   try {
     const response = await fetch('http://localhost:8080/query', {
@@ -108,4 +108,28 @@ export const deleteProjectService = async (projectId: string): Promise<boolean> 
   }
 
   return result.data.deleteProject;
+};
+
+
+export const getProjectMembersService = async (projectID: string) => {
+  console.log("HI")
+  const res = await fetch('http://localhost:8080/query', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: GET_PROJECT_MEMBERS,
+      variables: { projectID },
+    }),
+  });
+
+  const result = await res.json();
+  console.log("Fetched Members: ", result);
+
+  if (result.errors) {
+    throw new Error(result.errors[0].message);
+  }
+
+  return result.data.getProjectMembers;
 };

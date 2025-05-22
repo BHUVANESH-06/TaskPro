@@ -87,6 +87,7 @@ type Query {
   users: [User!]!
   collaborators(projectID: String!): [User!]! 
   getProjectMembers(projectID: String!) : [User!]!
+  tasksByAssignedTo(assignedToId: String!): [Task!]!
 }
 
 
@@ -101,13 +102,13 @@ type Mutation {
   
 
   createTask(
-    projectId: ID!
+    projectId: String!
     title: String!
     description: String
     status: TaskStatus!
     priority: TaskPriority!
     dueDate: String
-    assignedToId: ID
+    assignedToId: String
   ): Task!
   updateTask(
     id: ID!

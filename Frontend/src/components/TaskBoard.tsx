@@ -24,9 +24,10 @@ interface Props {
   setTasks: (tasks: Task[]) => void;
 }
 
-const columns: TaskStatus[] = ['To Do', 'In Progress', 'In Review', 'Done'];
+const columns: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
 
 const TaskBoard: React.FC<Props> = ({ tasks, onSelectTask, setTasks }) => {
+  console.log(tasks)
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor)

@@ -50,5 +50,6 @@ export async function loginUser(email: string, password: string) {
     
     localStorage.setItem("token", user.token);
     localStorage.setItem("userId", user.id.toString());
+    localStorage.setItem("name",user.name);
     return user;
   }

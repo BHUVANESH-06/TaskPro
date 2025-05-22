@@ -1,135 +1,63 @@
-import React, { useState,useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import type { Task } from "../types/task";
 import TaskBoard from "../components/TaskBoard";
 import TaskModal from "../components/TaskModal";
 import TaskForm from "../components/TaskForm";
 import TaskFilters from "../components/TaskFilters";
+import { useCreateTask } from "../hooks/useCreateTask";
+import { useTasksByAssignedTo } from "../hooks/tasksByAssignedTo";
 
 const TasksPage: React.FC = () => {
-    const [tasks, setTasks] = useState<Task[]>([
-      {
-        id: "1",
-        title: "Setup Firebase Auth",
-        status: "To Do",
-        priority: "High",
-        assignee: "Chullu",
-        dueDate: "2025-05-10",
-        progress: 0,
-        project: "Login System",
-      },
-      {
-        id: "2",
-        title: "Design Task Modal",
-        status: "In Progress",
-        priority: "Medium",
-        assignee: "Shanu",
-        dueDate: "2025-05-11",
-        progress: 45,
-        project: "UI",
-      },
-      {
-        id: "3",
-        title: "Backend API for tasks",
-        status: "Done",
-        priority: "Low",
-        assignee: "Deepa",
-        dueDate: "2025-05-08",
-        progress: 100,
-        project: "Backend",
-      },
-      {
-        id: "4",
-        title: "User Authentication with OAuth",
-        status: "To Do",
-        priority: "High",
-        assignee: "Bhuvi",
-        dueDate: "2025-06-01",
-        progress: 0,
-        project: "Login System",
-      },
-      {
-        id: "5",
-        title: "Design Task Card UI",
-        status: "In Progress",
-        priority: "Medium",
-        assignee: "Raj",
-        dueDate: "2025-05-15",
-        progress: 60,
-        project: "UI",
-      },
-      {
-        id: "6",
-        title: "Build Responsive Layout",
-        status: "Done",
-        priority: "Low",
-        assignee: "Priya",
-        dueDate: "2025-05-07",
-        progress: 100,
-        project: "UI",
-      },
-      {
-        id: "7",
-        title: "Implement Redux for State Management",
-        status: "In Progress",
-        priority: "High",
-        assignee: "Gopi",
-        dueDate: "2025-06-10",
-        progress: 40,
-        project: "State Management",
-      },
-      {
-        id: "8",
-        title: "Setup Continuous Integration",
-        status: "To Do",
-        priority: "Medium",
-        assignee: "Vani",
-        dueDate: "2025-06-05",
-        progress: 0,
-        project: "DevOps",
-      },
-      {
-        id: "9",
-        title: "Write Unit Tests for Task API",
-        status: "In Progress",
-        priority: "High",
-        assignee: "Kumar",
-        dueDate: "2025-06-12",
-        progress: 25,
-        project: "Backend",
-      },
-      {
-        id: "10",
-        title: "Document API Endpoints",
-        status: "Done",
-        priority: "Low",
-        assignee: "Suresh",
-        dueDate: "2025-05-06",
-        progress: 100,
-        project: "Documentation",
-      },
-    ]);
-    
+  const userId = localStorage.getItem("userId") || "";
+  console.log(userId)
+  const [tasksState, setTasks] = useState<Task[]>([]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
-  const [projectFilter,setProjectFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
 
-  const handleAddTask = (task: Task) => {
-    const newTask = {
-      ...task,
-      id: (tasks.length + 1).toString(),
-    };
-    setTasks((prev) => [...prev, newTask]);
-    setShowForm(false);
+  const { tasks, loading, error } = useTasksByAssignedTo(userId);
+  const { createTask, loading: taskLoading, error: taskError } = useCreateTask();
+  console.log(tasks)
+  useEffect(() => {
+    if (tasks) {
+      console.log("HI")
+      setTasks(tasks);
+    }
+  }, [tasks]);
+
+  const handleAddTask = async (task: Task) => {
+    try {
+      const res = await createTask(
+        task.title,
+        task.description,
+        task.dueDate,
+        task.priority,
+        task.projectId,
+        task.status,
+        task.assignee
+      );
+      console.log("Task created:", res);
+
+      if (res) {
+        console.log("Task created:", res);
+        setTasks((prev) => [...prev, res]);
+        setShowForm(false);
+      } else {
+        console.error("Task creation failed, not adding to list");
+      }
+    } catch (err) {
+      console.error("Failed to create task", err);
+    }
   };
 
-  const filteredTasks = tasks.filter((task) => {
-  const statusMatch = !statusFilter || task.status === statusFilter;
-  const priorityMatch = !priorityFilter || task.priority === priorityFilter;
-  const projectMatch = !projectFilter || task.project === projectFilter;
-  return statusMatch && priorityMatch && projectMatch;
-});
+  const filteredTasks = tasksState.filter((task) => {
+    const statusMatch = !statusFilter || task.status === statusFilter;
+    const priorityMatch = !priorityFilter || task.priority === priorityFilter;
+    const projectMatch = !projectFilter || task.projectId === projectFilter;
+    return statusMatch && priorityMatch && projectMatch;
+  });
 
   return (
     <div className="p-8 w-full mx-auto">
@@ -152,7 +80,11 @@ const TasksPage: React.FC = () => {
         setProject={setProjectFilter}
       />
 
-      <TaskBoard tasks={filteredTasks} onSelectTask={(task) => setSelectedTask(task)} />
+      <TaskBoard
+        tasks={filteredTasks}
+        onSelectTask={(task) => setSelectedTask(task)}
+        setTasks={setTasks}
+      />
 
       {selectedTask && (
         <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />

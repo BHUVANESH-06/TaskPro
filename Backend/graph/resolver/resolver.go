@@ -193,6 +193,48 @@ func (r *queryResolver) GetProjectMembers(ctx context.Context, projectID string)
     return gqlUsers, nil
 }
 
+func (r *queryResolver) TasksByAssignedTo(ctx context.Context, assignedToId string) ([]*model.Task, error) {
+    uid, err := strconv.ParseUint(assignedToId, 10, 32)
+    if err != nil {
+        return nil, fmt.Errorf("invalid assignedToId: %v", err)
+    }
+
+    tasks, err := r.TaskService.GetTasksByAssignedTo(uint(uid))
+    if err != nil {
+        return nil, err
+    }
+
+    var gqlTasks []*model.Task
+    for _, task := range tasks {
+        createdAt := task.CreatedAt.Format(time.RFC3339)
+        updatedAt := task.UpdatedAt.Format(time.RFC3339)
+
+        var duePtr *string
+        if task.DueDate != nil {
+            s := task.DueDate.Format(time.RFC3339)
+            duePtr = &s
+        }
+
+        user := &model.User{ID: fmt.Sprintf("%d", task.AssignedTo)}
+
+        gqlTasks = append(gqlTasks, &model.Task{
+            ID:          fmt.Sprintf("%d", task.ID),
+            Title:       task.Title,
+            Description: &task.Description,
+            Status:      model.TaskStatus(task.Status),
+            Priority:    model.TaskPriority(task.Priority),
+            DueDate:     duePtr,
+            CreatedAt:   createdAt,
+            UpdatedAt:   updatedAt,
+            Project:     &model.Project{ID: fmt.Sprintf("%d", task.ProjectID)},
+            AssignedTo:  user,
+            Comments:    []*model.Comment{},
+            Labels:      []*model.Label{},
+        })
+    }
+
+    return gqlTasks, nil
+}
 
 
 func (r *mutationResolver) CreateTask(

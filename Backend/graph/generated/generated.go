@@ -108,6 +108,7 @@ type ComplexityRoot struct {
 		MyProjects        func(childComplexity int, ownerID string) int
 		Project           func(childComplexity int, id string) int
 		Task              func(childComplexity int, id string) int
+		TasksByAssignedTo func(childComplexity int, assignedToID string) int
 		Users             func(childComplexity int) int
 	}
 
@@ -163,6 +164,7 @@ type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
 	Collaborators(ctx context.Context, projectID string) ([]*model.User, error)
 	GetProjectMembers(ctx context.Context, projectID string) ([]*model.User, error)
+	TasksByAssignedTo(ctx context.Context, assignedToID string) ([]*model.Task, error)
 }
 
 type executableSchema struct {
@@ -596,6 +598,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.Task(childComplexity, args["id"].(string)), true
 
+	case "Query.tasksByAssignedTo":
+		if e.complexity.Query.TasksByAssignedTo == nil {
+			break
+		}
+
+		args, err := ec.field_Query_tasksByAssignedTo_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.TasksByAssignedTo(childComplexity, args["assignedToId"].(string)), true
+
 	case "Query.users":
 		if e.complexity.Query.Users == nil {
 			break
@@ -950,6 +964,7 @@ type Query {
   users: [User!]!
   collaborators(projectID: String!): [User!]! 
   getProjectMembers(projectID: String!) : [User!]!
+  tasksByAssignedTo(assignedToId: String!): [Task!]!
 }
 
 
@@ -964,13 +979,13 @@ type Mutation {
   
 
   createTask(
-    projectId: ID!
+    projectId: String!
     title: String!
     description: String
     status: TaskStatus!
     priority: TaskPriority!
     dueDate: String
-    assignedToId: ID
+    assignedToId: String
   ): Task!
   updateTask(
     id: ID!
@@ -1400,7 +1415,7 @@ func (ec *executionContext) field_Mutation_createTask_argsProjectID(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
 	if tmp, ok := rawArgs["projectId"]; ok {
-		return ec.unmarshalNID2string(ctx, tmp)
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
 	var zeroVal string
@@ -1508,7 +1523,7 @@ func (ec *executionContext) field_Mutation_createTask_argsAssignedToID(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("assignedToId"))
 	if tmp, ok := rawArgs["assignedToId"]; ok {
-		return ec.unmarshalOID2ᚖstring(ctx, tmp)
+		return ec.unmarshalOString2ᚖstring(ctx, tmp)
 	}
 
 	var zeroVal *string
@@ -2098,6 +2113,34 @@ func (ec *executionContext) field_Query_task_argsID(
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 	if tmp, ok := rawArgs["id"]; ok {
 		return ec.unmarshalNID2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_tasksByAssignedTo_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_tasksByAssignedTo_argsAssignedToID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["assignedToId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_tasksByAssignedTo_argsAssignedToID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["assignedToId"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("assignedToId"))
+	if tmp, ok := rawArgs["assignedToId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
 	var zeroVal string
@@ -5064,6 +5107,87 @@ func (ec *executionContext) fieldContext_Query_getProjectMembers(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_getProjectMembers_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_tasksByAssignedTo(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_tasksByAssignedTo(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().TasksByAssignedTo(rctx, fc.Args["assignedToId"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Task)
+	fc.Result = res
+	return ec.marshalNTask2ᚕᚖtaskproᚋgraphᚋmodelᚐTaskᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_tasksByAssignedTo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Task_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Task_title(ctx, field)
+			case "description":
+				return ec.fieldContext_Task_description(ctx, field)
+			case "status":
+				return ec.fieldContext_Task_status(ctx, field)
+			case "priority":
+				return ec.fieldContext_Task_priority(ctx, field)
+			case "dueDate":
+				return ec.fieldContext_Task_dueDate(ctx, field)
+			case "project":
+				return ec.fieldContext_Task_project(ctx, field)
+			case "assignedTo":
+				return ec.fieldContext_Task_assignedTo(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Task_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Task_updatedAt(ctx, field)
+			case "comments":
+				return ec.fieldContext_Task_comments(ctx, field)
+			case "labels":
+				return ec.fieldContext_Task_labels(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Task", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_tasksByAssignedTo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -8821,6 +8945,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_getProjectMembers(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "tasksByAssignedTo":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_tasksByAssignedTo(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

@@ -39,9 +39,9 @@ const TaskFilters: React.FC<TaskFiltersProps> = ({
           style={arrowIconStyle}
         >
           <option value="">All Statuses</option>
-          <option value="To Do">To Do</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Done">Done</option>
+          <option value="TODO">To Do</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="DONE">Done</option>
         </select>
       </div>
 

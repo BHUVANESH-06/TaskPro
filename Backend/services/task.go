@@ -70,6 +70,17 @@ func (s *TaskService) CreateTask(
 	return task, nil
 }
 
+func (s *TaskService) GetTasksByAssignedTo(assignedToID uint) ([]*models.Task, error) {
+    var tasks []*models.Task
+    err := db.DB.Where("assigned_to = ?", assignedToID).Find(&tasks).Error
+    if err != nil {
+        return nil, err
+    }
+
+    return tasks, nil
+}
+
+
 func (s *TaskService) UpdateTask(id uint, title string, description string, status string, priority string, dueDate string, assignedToID uint) (*models.Task, error) {
 
 	task := &models.Task{}

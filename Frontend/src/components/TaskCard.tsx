@@ -7,9 +7,9 @@ interface Props {
 }
 
 const priorityColor = {
-  High: 'bg-red-500',
-  Medium: 'bg-yellow-400',
-  Low: 'bg-green-500',
+  HIGH: 'bg-red-500',
+  MEDIUM: 'bg-yellow-400',
+  LOW: 'bg-green-500',
 };
 
 const TaskCard: React.FC<Props> = ({ task, onClick }) => {
@@ -23,7 +23,7 @@ const TaskCard: React.FC<Props> = ({ task, onClick }) => {
         <span className="text-sm text-gray-500">{task.dueDate}</span>
       </div>
       <h3 className="font-semibold mt-2 text-gray-800">{task.title}</h3>
-      <div className="text-xs text-gray-500 mt-1">Assigned to: {task.assignee}</div>
+      <div className="text-xs text-gray-500 mt-1">Assigned to: {localStorage.getItem("name")}</div>
       {task.progress !== undefined && (
         <div className="mt-2 bg-gray-200 rounded-full h-2">
           <div
